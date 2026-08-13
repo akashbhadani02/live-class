@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 let mode = '', role = '', roomId = '', userName = '', className = '';
 let localStream = null, screenStream = null, sharing = false, micOn = false, cameraOn = false, handRaised = false, speakingAllowed = false;
 const peers = {}, remoteMeta = {};
+let participantState = new Map();
 const rtc = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
 
 function show(el){el.classList.remove('hidden')} function hide(el){el.classList.add('hidden')}
@@ -66,18 +67,21 @@ function updateMediaButtons(){
   if(mic){mic.querySelector('small').textContent=micOn?'Mute':'Enable Mic';mic.classList.toggle('off',!micOn)}
   if(cam){cam.querySelector('small').textContent=cameraOn?'Camera':'Enable Camera';cam.classList.toggle('off',!cameraOn)}
 }
-function addLocalVideo(){const box=document.createElement('div');box.className='video-card local';box.id='localCard';box.innerHTML=`<video id="localVideo" autoplay muted playsinline></video><div class="name-tag">${esc(userName)} <b>YOU</b></div>`;$('videoGrid').appendChild(box);if(localStream)$('localVideo').srcObject=localStream;updateMediaButtons()}
-function addRemoteVideo(id,name,r='student'){remoteMeta[id]={name,role:r};let card=document.getElementById('v-'+id);if(card)return;card=document.createElement('div');card.className='video-card';card.id='v-'+id;card.innerHTML=`<video id="video-${id}" autoplay playsinline></video><div class="name-tag">${esc(name)} ${r==='teacher'?'<b>TEACHER</b>':''}</div>`;$('videoGrid').appendChild(card)}
+function addLocalVideo(){const box=document.createElement('div');box.className='video-card local';box.id='localCard';box.innerHTML=`<video id="localVideo" autoplay muted playsinline></video><div class="name-tag">${esc(userName)} <b>YOU</b></div><div class="hand-badge hidden">🙋 Hand Raised</div>`;$('videoGrid').appendChild(box);if(localStream)$('localVideo').srcObject=localStream;updateMediaButtons();updateHandCard(socket.id, handRaised)}
+function addRemoteVideo(id,name,r='student'){remoteMeta[id]={name,role:r,handRaised:participantState.get(id)?.handRaised||false};let card=document.getElementById('v-'+id);if(card)return;card=document.createElement('div');card.className='video-card';card.id='v-'+id;card.innerHTML=`<video id="video-${id}" autoplay playsinline></video><div class="name-tag">${esc(name)} ${r==='teacher'?'<b>TEACHER</b>':''}</div><div class="hand-badge hidden">🙋 Hand Raised</div>`;$('videoGrid').appendChild(card);updateHandCard(id,remoteMeta[id].handRaised)}
 function removeVideo(id){document.getElementById('v-'+id)?.remove();delete remoteMeta[id];if(peers[id]){peers[id].close();delete peers[id]}}
 function makePeer(id,initiator){const pc=new RTCPeerConnection(rtc);if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));pc.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{target:id,candidate:e.candidate})};pc.ontrack=e=>{addRemoteVideo(id,remoteMeta[id]?.name||'Participant',remoteMeta[id]?.role);$('video-'+id).srcObject=e.streams[0]};pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState)) removeVideo(id)};peers[id]=pc;if(initiator){pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>socket.emit('offer',{target:id,offer:pc.localDescription}))}return pc}
-socket.on('class-state',async s=>{className=s.className;$('classTitle').textContent=className;s.existingUsers.forEach(u=>{remoteMeta[u.socketId]={name:u.userName,role:u.role};makePeer(u.socketId,true);addRemoteVideo(u.socketId,u.userName,u.role)});updateParticipants(s.participants)});
-socket.on('user-joined',u=>{remoteMeta[u.socketId]={name:u.userName,role:u.role};addRemoteVideo(u.socketId,u.userName,u.role);});
+socket.on('class-state',async s=>{className=s.className;$('classTitle').textContent=className;participantState=new Map((s.participants||[]).map(p=>[p.socketId,p]));s.existingUsers.forEach(u=>{remoteMeta[u.socketId]={name:u.userName,role:u.role,handRaised:participantState.get(u.socketId)?.handRaised||false};makePeer(u.socketId,true);addRemoteVideo(u.socketId,u.userName,u.role)});updateParticipants(s.participants)});
+socket.on('user-joined',u=>{remoteMeta[u.socketId]={name:u.userName,role:u.role,handRaised:false};addRemoteVideo(u.socketId,u.userName,u.role);});
 socket.on('offer',async({sender,offer,userName:name,role:r})=>{remoteMeta[sender]={name,role:r};addRemoteVideo(sender,name,r);const pc=peers[sender]||makePeer(sender,false);await pc.setRemoteDescription(offer);const a=await pc.createAnswer();await pc.setLocalDescription(a);socket.emit('answer',{target:sender,answer:pc.localDescription})});
 socket.on('answer',async({sender,answer})=>{if(peers[sender])await peers[sender].setRemoteDescription(answer)});
 socket.on('ice-candidate',async({sender,candidate})=>{if(peers[sender])try{await peers[sender].addIceCandidate(candidate)}catch(e){}});
 socket.on('user-left',id=>removeVideo(id));
 socket.on('participants',updateParticipants);
 function updateParticipants(list=[]){
+  participantState=new Map(list.map(p=>[p.socketId,p]));
+  list.forEach(p=>{ if(p.socketId===socket.id) handRaised=!!p.handRaised; if(remoteMeta[p.socketId]) remoteMeta[p.socketId].handRaised=!!p.handRaised; updateHandCard(p.socketId,!!p.handRaised); });
+  updateRaiseHandButton();
   $('participantsPanel').innerHTML=list.map(p=>{
     const hand=p.handRaised?' hand-raised':'';
     let actions='';
@@ -93,7 +97,8 @@ window.removeStudent=id=>socket.emit('teacher-command',{command:'remove-student'
 window.allowSpeak=id=>socket.emit('teacher-command',{command:'allow-speak',target:id});
 window.denySpeak=id=>socket.emit('teacher-command',{command:'deny-speak',target:id});
 $('raiseHandBtn').onclick=()=>{ if(role==='teacher'){toast('Teacher does not need to raise hand.');return;} handRaised=!handRaised; socket.emit('raise-hand',{raised:handRaised}); updateRaiseHandButton(); };
-function updateRaiseHandButton(){ const b=$('raiseHandBtn'); if(!b)return; b.classList.toggle('hand',handRaised); b.querySelector('small').textContent=handRaised?'Lower Hand':'Raise Hand'; }
+function updateRaiseHandButton(){ const b=$('raiseHandBtn'); if(!b)return; b.classList.toggle('hand',handRaised); b.querySelector('small').textContent=handRaised?'Lower Hand':'Raise Hand'; updateHandCard(socket.id,handRaised); }
+function updateHandCard(id,raised){ const card=document.getElementById(id==='local'? 'localCard' : 'v-'+id); if(!card)return; const badge=card.querySelector('.hand-badge'); if(badge)badge.classList.toggle('hidden',!raised); card.classList.toggle('hand-raised-card',!!raised); }
 
 socket.on('speaking-permission', ({allowed})=>{
   speakingAllowed=!!allowed;
@@ -103,7 +108,7 @@ socket.on('speaking-permission', ({allowed})=>{
   if(speakingAllowed){ handRaised=false; updateRaiseHandButton(); toast('Teacher allowed you to speak.'); }
   else if(role==='student'){ micOn=false; updateMediaButtons(); toast('Your microphone was muted by the teacher.'); }
 });
-socket.on('hand-update', ({userName:name,raised})=>{ if(role==='teacher' && raised) toast(`${name} raised a hand.`); });
+socket.on('hand-update', ({socketId,userName:name,raised})=>{ if(remoteMeta[socketId]) remoteMeta[socketId].handRaised=!!raised; updateHandCard(socketId,!!raised); if(socketId===socket.id){handRaised=!!raised;updateRaiseHandButton();} if(role==='teacher' && raised) toast(`${name} raised a hand.`); });
 socket.on('chat-message',m=>addMessage(m));function addMessage(m){const d=document.createElement('div');d.className='message';d.innerHTML=`<b>${esc(m.userName)}</b><span>${esc(m.message)}</span>`;$('messages').appendChild(d);$('messages').scrollTop=$('messages').scrollHeight}
 $('sendBtn').onclick=sendChat;$('chatInput').onkeydown=e=>{if(e.key==='Enter')sendChat()};function sendChat(){const m=$('chatInput').value.trim();if(!m)return;socket.emit('chat-message',{message:m});$('chatInput').value=''}
 $('micBtn').onclick=async()=>{if(role==='student' && !speakingAllowed){toast('Raise your hand and wait for the teacher to allow you to speak.');return;}if(!localStream?.getAudioTracks().length){await enableMedia('mic');return;}micOn=!micOn;localStream.getAudioTracks().forEach(t=>t.enabled=micOn && (role==='teacher'||speakingAllowed));updateMediaButtons()};
