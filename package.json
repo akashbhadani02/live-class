@@ -1,13 +1,11 @@
 {
-  "name": "live-class-app",
+  "name": "jitsi-live-class-app",
   "version": "1.0.0",
-  "description": "Teacher and student live class app using WebRTC and Socket.IO",
-  "main": "server.js",
+  "private": true,
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "socket.io": "^4.8.1"
+    "express": "^5.1.0"
   }
 }
