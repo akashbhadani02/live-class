@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Live Class</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast" class="toast"></div>
+<section id="landing" class="landing">
+  <div class="hero-card">
+    <div class="logo">🎓</div>
+    <div class="eyebrow">ONLINE EDUCATION</div>
+    <h1>Live Class</h1>
+    <p class="subtitle">Teacher-led live classes with video, screen sharing, chat and attendance.</p>
+    <div class="mode-grid">
+      <button class="mode-card" id="teacherMode"><span>👨‍🏫</span><b>Teacher</b><small>Create & start a class</small></button>
+      <button class="mode-card" id="studentMode"><span>👨‍🎓</span><b>Student</b><small>Join a live class</small></button>
+    </div>
+  </div>
+</section>
+
+<section id="setup" class="setup hidden">
+  <div class="setup-card">
+    <button class="back" id="backBtn">← Back</button>
+    <div id="teacherSetup">
+      <div class="setup-icon">👨‍🏫</div><h2>Start a Live Class</h2><p>Create a class and share the Class ID with students.</p>
+      <input id="teacherName" placeholder="Teacher name" autocomplete="off">
+      <input id="className" placeholder="Class name e.g. Spoken English" autocomplete="off">
+      <button class="primary" id="createBtn">Create Class</button>
+    </div>
+    <div id="studentSetup" class="hidden">
+      <div class="setup-icon">👨‍🎓</div><h2>Join Live Class</h2><p>Enter the Class ID shared by your teacher.</p>
+      <input id="studentName" placeholder="Student name" autocomplete="off">
+      <input id="joinRoomId" placeholder="6-digit Class ID" inputmode="numeric" autocomplete="off">
+      <button class="primary" id="joinBtn">Join Class</button>
+    </div>
+    <p id="setupError" class="error"></p>
+  </div>
+</section>
+
+<section id="waiting" class="waiting hidden">
+  <div class="waiting-card"><div class="logo small">🎓</div><h2 id="waitingTitle">Class created</h2><p>Share this Class ID with your students:</p><div class="class-code" id="createdRoom">------</div><button class="primary" id="startClassBtn">Enter Class</button><button class="secondary" id="copyCreatedBtn">📋 Copy Class ID</button></div>
+</section>
+
+<section id="classScreen" class="class-screen hidden">
+<header class="topbar"><div><strong>🎓 Live Class</strong><span id="classTitle">Class</span></div><div class="top-actions"><span class="live-pill"><i></i> LIVE</span><span>Class ID: <b id="currentRoom">-</b></span><button id="copyRoomBtn">📋</button></div></header>
+<main class="workspace">
+  <section class="video-area"><div id="videoGrid" class="video-grid"></div><div class="controls">
+    <button id="micBtn" class="control"><span>🎙️</span><small>Mute</small></button>
+    <button id="cameraBtn" class="control"><span>📹</span><small>Camera</small></button>
+    <button id="screenBtn" class="control"><span>🖥️</span><small>Share</small></button>
+    <button id="raiseHandBtn" class="control"><span>🙋</span><small>Raise Hand</small></button>
+    <button id="peopleBtn" class="control"><span>👥</span><small>People</small></button>
+    <button id="chatBtn" class="control"><span>💬</span><small>Chat</small></button>
+    <button id="endBtn" class="control danger hidden"><span>⏹️</span><small>End Class</small></button>
+    <button id="leaveBtn" class="control danger"><span>🚪</span><small>Leave</small></button>
+  </div></section>
+  <aside id="sidePanel" class="side-panel hidden"><div class="panel-head"><h3 id="panelTitle">Participants</h3><button id="closePanel">✕</button></div><div id="participantsPanel"></div><div id="chatPanel" class="hidden"><div id="messages" class="messages"></div><div class="chat-input"><input id="chatInput" placeholder="Write a message..."><button id="sendBtn">➤</button></div></div></aside>
+</main>
+</section>
+<script src="/socket.io/socket.io.js"></script><script src="script.js"></script>
+</body></html>
