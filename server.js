@@ -153,3 +153,42 @@ app.get('/api/health', (req, res) => res.json({ ok: true, app: 'Live Class' }));
 app.use((req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 server.listen(PORT, () => console.log(`Live Class running on port ${PORT}`));
+
+<script id="double-click-fullscreen-handler">
+(function doubleClickFullscreenHandler(){
+  function toggleFullscreen(el){
+    if (!el) return;
+    const current = document.fullscreenElement;
+    if (current) {
+      document.exitFullscreen?.().catch(()=>{});
+      return;
+    }
+    if (el.requestFullscreen) {
+      el.requestFullscreen({navigationUI:"hide"}).catch(()=>{
+        el.classList.add("double-click-fullscreen");
+      });
+    } else {
+      el.classList.add("double-click-fullscreen");
+    }
+  }
+
+  document.addEventListener("dblclick", function(e){
+    const target = e.target;
+    if (!target) return;
+
+    // Prefer video/participant/card elements.
+    const el = target.closest("video, .participant-card, .video-card, .participant, .tile, .video-tile");
+    if (el) {
+      e.preventDefault();
+      toggleFullscreen(el);
+    }
+  }, true);
+
+  document.addEventListener("fullscreenchange", function(){
+    if (!document.fullscreenElement) {
+      document.querySelectorAll(".double-click-fullscreen")
+        .forEach(el => el.classList.remove("double-click-fullscreen"));
+    }
+  });
+})();
+</script>

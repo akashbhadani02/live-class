@@ -137,3 +137,42 @@ $('endBtn').onclick=()=>{if(confirm('End this live class for everyone?'))socket.
 socket.on('class-ended',()=>{toast('Class has ended');cleanup();hide($('classScreen'));hide($('waiting'));show($('landing'))});socket.on('removed-by-teacher',()=>{toast('You were removed from the class');cleanup();hide($('classScreen'));show($('landing'))});socket.on('join-error',m=>{$('setupError').textContent=m;hide($('waiting'));show($('setup'));show(role==='teacher'?$('teacherSetup'):$('studentSetup'))});
 function cleanup(){stopShare();localStream?.getTracks().forEach(t=>t.stop());localStream=null;Object.keys(peers).forEach(removeVideo);$('videoGrid').innerHTML='';roomId='';}
 function esc(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+
+<script id="double-click-fullscreen-handler">
+(function doubleClickFullscreenHandler(){
+  function toggleFullscreen(el){
+    if (!el) return;
+    const current = document.fullscreenElement;
+    if (current) {
+      document.exitFullscreen?.().catch(()=>{});
+      return;
+    }
+    if (el.requestFullscreen) {
+      el.requestFullscreen({navigationUI:"hide"}).catch(()=>{
+        el.classList.add("double-click-fullscreen");
+      });
+    } else {
+      el.classList.add("double-click-fullscreen");
+    }
+  }
+
+  document.addEventListener("dblclick", function(e){
+    const target = e.target;
+    if (!target) return;
+
+    // Prefer video/participant/card elements.
+    const el = target.closest("video, .participant-card, .video-card, .participant, .tile, .video-tile");
+    if (el) {
+      e.preventDefault();
+      toggleFullscreen(el);
+    }
+  }, true);
+
+  document.addEventListener("fullscreenchange", function(){
+    if (!document.fullscreenElement) {
+      document.querySelectorAll(".double-click-fullscreen")
+        .forEach(el => el.classList.remove("double-click-fullscreen"));
+    }
+  });
+})();
+</script>
