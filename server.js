@@ -23,7 +23,7 @@ function roomInfo(roomId) {
     teacherId: room.teacherId,
     teacherName: room.teacherName,
     participants: [...room.participants.values()].map(p => ({
-      socketId: p.socketId, userName: p.userName, role: p.role, joinedAt: p.joinedAt
+      socketId: p.socketId, userName: p.userName, role: p.role, joinedAt: p.joinedAt, handRaised: !!p.handRaised, speakingAllowed: !!p.speakingAllowed
     }))
   };
 }
@@ -57,7 +57,7 @@ io.on('connection', socket => {
     socket.role = role;
 
     const existingUsers = [...room.participants.values()].filter(p => p.socketId !== socket.id);
-    room.participants.set(socket.id, { socketId: socket.id, userName, role, joinedAt: Date.now() });
+    room.participants.set(socket.id, { socketId: socket.id, userName, role, joinedAt: Date.now(), handRaised: false, speakingAllowed: role === 'teacher' });
 
     socket.emit('class-state', { ...roomInfo(roomId), existingUsers });
     socket.to(roomId).emit('user-joined', { socketId: socket.id, userName, role });
@@ -79,6 +79,16 @@ io.on('connection', socket => {
     io.to(socket.roomId).emit('chat-message', { userName: socket.userName, role: socket.role, message: String(message).slice(0, 1000), time: Date.now() });
   });
 
+  socket.on('raise-hand', ({ raised }) => {
+    if (!socket.roomId) return;
+    const room = rooms.get(socket.roomId);
+    const participant = room?.participants.get(socket.id);
+    if (!participant || participant.role === 'teacher') return;
+    participant.handRaised = !!raised;
+    io.to(socket.roomId).emit('participants', roomInfo(socket.roomId).participants);
+    io.to(socket.roomId).emit('hand-update', { socketId: socket.id, userName: socket.userName, raised: participant.handRaised });
+  });
+
   socket.on('teacher-command', ({ command, target }) => {
     if (!socket.roomId || socket.role !== 'teacher') return;
     const room = rooms.get(socket.roomId);
@@ -87,6 +97,17 @@ io.on('connection', socket => {
       io.to(socket.roomId).emit('class-ended');
       for (const p of room.participants.values()) io.sockets.sockets.get(p.socketId)?.leave(socket.roomId);
       rooms.delete(socket.roomId);
+      return;
+    }
+    if (['allow-speak','deny-speak','lower-hand'].includes(command) && target && room.participants.has(target)) {
+      const p = room.participants.get(target);
+      if (p.role === 'student') {
+        if (command === 'allow-speak') { p.speakingAllowed = true; p.handRaised = false; }
+        if (command === 'deny-speak') { p.speakingAllowed = false; p.handRaised = false; }
+        if (command === 'lower-hand') { p.handRaised = false; }
+        io.to(target).emit('speaking-permission', { allowed: !!p.speakingAllowed });
+        io.to(socket.roomId).emit('participants', roomInfo(socket.roomId).participants);
+      }
       return;
     }
     if (command === 'remove-student' && target && room.participants.has(target) && target !== socket.id) {
