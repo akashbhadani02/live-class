@@ -1,7 +1,7 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 let mode = '', role = '', roomId = '', userName = '', className = '';
-let localStream = null, screenStream = null, sharing = false, micOn = false, cameraOn = false, handRaised = false, speakingAllowed = false;
+let localStream = null, screenStream = null, sharing = false, micOn = false, cameraOn = false, handRaised = false, speakingAllowed = false, mutedByTeacher = false;
 const peers = {}, remoteMeta = {};
 let participantState = new Map();
 const rtc = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
@@ -19,7 +19,7 @@ $('copyCreatedBtn').onclick=()=>copy(roomId); $('startClassBtn').onclick=()=>joi
 async function joinClass(){
   hide($('landing'));hide($('setup'));hide($('waiting'));show($('classScreen'));
   $('currentRoom').textContent=roomId;$('classTitle').textContent=className||'Live Class';
-  if(role==='teacher'){show($('endBtn')); speakingAllowed=true;}else {hide($('endBtn')); speakingAllowed=false;}
+  if(role==='teacher'){show($('endBtn')); speakingAllowed=true;}else {hide($('endBtn')); speakingAllowed=true;}
   updateRaiseHandButton();
 
   // Camera and microphone are OPTIONAL. The class can be joined even when
@@ -37,7 +37,7 @@ async function tryGetMedia(){
     localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
     cameraOn=localStream.getVideoTracks().length>0;
     micOn=localStream.getAudioTracks().length>0;
-    if(role==='student' && !speakingAllowed){ localStream.getAudioTracks().forEach(t=>t.enabled=false); }
+    if(role==='student' && mutedByTeacher){ localStream.getAudioTracks().forEach(t=>t.enabled=false); micOn=false; }
   }catch(e){
     // If both are unavailable/denied, silently continue without media.
     localStream=null; cameraOn=false; micOn=false;
@@ -53,7 +53,7 @@ async function enableMedia(kind){
     const stream=await navigator.mediaDevices.getUserMedia(constraints);
     if(!localStream)localStream=new MediaStream();
     stream.getTracks().forEach(track=>localStream.addTrack(track));
-    if(kind==='camera')cameraOn=true; else { if(role==='student' && !speakingAllowed){ stream.getAudioTracks().forEach(t=>t.enabled=false); micOn=false; } else micOn=true; }
+    if(kind==='camera')cameraOn=true; else { if(role==='student' && mutedByTeacher){ stream.getAudioTracks().forEach(t=>t.enabled=false); micOn=false; } else micOn=true; }
     if($('localVideo'))$('localVideo').srcObject=localStream;
     for(const pc of Object.values(peers)){
       stream.getTracks().forEach(track=>pc.addTrack(track,localStream));
@@ -86,8 +86,8 @@ function updateParticipants(list=[]){
     const hand=p.handRaised?' hand-raised':'';
     let actions='';
     if(role==='teacher' && p.role!=='teacher'){
-      if(p.handRaised) actions=`<span class="hand-actions"><button onclick="allowSpeak('${p.socketId}')">Allow</button><button class="deny" onclick="denySpeak('${p.socketId}')">Deny</button></span>`;
-      else if(p.speakingAllowed) actions=`<span class="hand-actions"><button class="deny" onclick="denySpeak('${p.socketId}')">Mute</button></span>`;
+      if(p.handRaised) actions+=`<span class="hand-actions"><button onclick="allowSpeak('${p.socketId}')">Allow</button><button class="deny" onclick="denySpeak('${p.socketId}')">Deny</button></span>`;
+      actions+=`<button onclick="${p.mutedByTeacher?'unmuteStudent':'muteStudent'}('${p.socketId}')">${p.mutedByTeacher?'Unmute':'Mute'}</button>`;
       actions+=`<button onclick="removeStudent('${p.socketId}')">Remove</button>`;
     }
     return `<div class="participant${hand}"><span class="avatar">${esc(p.userName[0]||'?').toUpperCase()}</span><span>${esc(p.userName)} ${p.role==='teacher'?'<b class=teacher>Teacher</b>':''}${p.handRaised?' 🙋':''}</span>${actions}</div>`;
@@ -96,22 +96,36 @@ function updateParticipants(list=[]){
 window.removeStudent=id=>socket.emit('teacher-command',{command:'remove-student',target:id});
 window.allowSpeak=id=>socket.emit('teacher-command',{command:'allow-speak',target:id});
 window.denySpeak=id=>socket.emit('teacher-command',{command:'deny-speak',target:id});
+window.muteStudent=id=>socket.emit('teacher-command',{command:'mute-student',target:id});
+window.unmuteStudent=id=>socket.emit('teacher-command',{command:'unmute-student',target:id});
 $('raiseHandBtn').onclick=()=>{ if(role==='teacher'){toast('Teacher does not need to raise hand.');return;} handRaised=!handRaised; socket.emit('raise-hand',{raised:handRaised}); updateRaiseHandButton(); };
 function updateRaiseHandButton(){ const b=$('raiseHandBtn'); if(!b)return; b.classList.toggle('hand',handRaised); b.querySelector('small').textContent=handRaised?'Lower Hand':'Raise Hand'; updateHandCard(socket.id,handRaised); }
 function updateHandCard(id,raised){ const card=document.getElementById(id==='local'? 'localCard' : 'v-'+id); if(!card)return; const badge=card.querySelector('.hand-badge'); if(badge)badge.classList.toggle('hidden',!raised); card.classList.toggle('hand-raised-card',!!raised); }
 
 socket.on('speaking-permission', ({allowed})=>{
   speakingAllowed=!!allowed;
-  if(role==='student' && localStream){
-    localStream.getAudioTracks().forEach(t=>t.enabled=speakingAllowed && micOn);
+  if(role==='student' && localStream) localStream.getAudioTracks().forEach(t=>t.enabled=!!allowed && !mutedByTeacher && micOn);
+  if(speakingAllowed){ handRaised=false; updateRaiseHandButton(); }
+});
+
+socket.on('teacher-mic-state', ({muted})=>{
+  if(role!=='student') return;
+  mutedByTeacher=!!muted;
+  if(mutedByTeacher){
+    micOn=false;
+    localStream?.getAudioTracks().forEach(t=>t.enabled=false);
+    toast('Teacher muted your microphone.');
+  } else {
+    micOn=true;
+    localStream?.getAudioTracks().forEach(t=>t.enabled=true);
+    toast('Teacher unmuted your microphone.');
   }
-  if(speakingAllowed){ handRaised=false; updateRaiseHandButton(); toast('Teacher allowed you to speak.'); }
-  else if(role==='student'){ micOn=false; updateMediaButtons(); toast('Your microphone was muted by the teacher.'); }
+  updateMediaButtons();
 });
 socket.on('hand-update', ({socketId,userName:name,raised})=>{ if(remoteMeta[socketId]) remoteMeta[socketId].handRaised=!!raised; updateHandCard(socketId,!!raised); if(socketId===socket.id){handRaised=!!raised;updateRaiseHandButton();} if(role==='teacher' && raised) toast(`${name} raised a hand.`); });
 socket.on('chat-message',m=>addMessage(m));function addMessage(m){const d=document.createElement('div');d.className='message';d.innerHTML=`<b>${esc(m.userName)}</b><span>${esc(m.message)}</span>`;$('messages').appendChild(d);$('messages').scrollTop=$('messages').scrollHeight}
 $('sendBtn').onclick=sendChat;$('chatInput').onkeydown=e=>{if(e.key==='Enter')sendChat()};function sendChat(){const m=$('chatInput').value.trim();if(!m)return;socket.emit('chat-message',{message:m});$('chatInput').value=''}
-$('micBtn').onclick=async()=>{if(role==='student' && !speakingAllowed){toast('Raise your hand and wait for the teacher to allow you to speak.');return;}if(!localStream?.getAudioTracks().length){await enableMedia('mic');return;}micOn=!micOn;localStream.getAudioTracks().forEach(t=>t.enabled=micOn && (role==='teacher'||speakingAllowed));updateMediaButtons()};
+$('micBtn').onclick=async()=>{if(role==='student' && mutedByTeacher){toast('Teacher has muted your microphone.');return;}if(!localStream?.getAudioTracks().length){await enableMedia('mic');return;}micOn=!micOn;localStream.getAudioTracks().forEach(t=>t.enabled=micOn && !mutedByTeacher);updateMediaButtons()};
 $('cameraBtn').onclick=async()=>{if(!localStream?.getVideoTracks().length){await enableMedia('camera');return;}cameraOn=!cameraOn;localStream.getVideoTracks().forEach(t=>t.enabled=cameraOn);updateMediaButtons()};
 $('screenBtn').onclick=async()=>{if(!sharing){try{screenStream=await navigator.mediaDevices.getDisplayMedia({video:true});const track=screenStream.getVideoTracks()[0];for(const pc of Object.values(peers)){const sender=pc.getSenders().find(s=>s.track?.kind==='video');if(sender)await sender.replaceTrack(track)};$('localVideo').srcObject=screenStream;sharing=true;$('screenBtn').querySelector('small').textContent='Stop Share';track.onended=stopShare}catch(e){toast('Screen sharing cancelled.')}}else stopShare()};
 async function stopShare(){if(!sharing)return;const track=localStream.getVideoTracks()[0];for(const pc of Object.values(peers)){const sender=pc.getSenders().find(s=>s.track?.kind==='video');if(sender)await sender.replaceTrack(track)};screenStream?.getTracks().forEach(t=>t.stop());$('localVideo').srcObject=localStream;sharing=false;$('screenBtn').querySelector('small').textContent='Share'}
