@@ -67,8 +67,44 @@ function updateMediaButtons(){
   if(mic){mic.querySelector('small').textContent=micOn?'Mute':'Enable Mic';mic.classList.toggle('off',!micOn)}
   if(cam){cam.querySelector('small').textContent=cameraOn?'Camera':'Enable Camera';cam.classList.toggle('off',!cameraOn)}
 }
-function addLocalVideo(){const box=document.createElement('div');box.className='video-card local';box.id='localCard';box.innerHTML=`<video id="localVideo" autoplay muted playsinline></video><div class="name-tag">${esc(userName)} <b>YOU</b></div><div class="hand-badge hidden">🙋 Hand Raised</div>`;$('videoGrid').appendChild(box);if(localStream)$('localVideo').srcObject=localStream;updateMediaButtons();updateHandCard(socket.id, handRaised)}
-function addRemoteVideo(id,name,r='student'){remoteMeta[id]={name,role:r,handRaised:participantState.get(id)?.handRaised||false};let card=document.getElementById('v-'+id);if(card)return;card=document.createElement('div');card.className='video-card';card.id='v-'+id;card.innerHTML=`<video id="video-${id}" autoplay playsinline></video><div class="name-tag">${esc(name)} ${r==='teacher'?'<b>TEACHER</b>':''}</div><div class="hand-badge hidden">🙋 Hand Raised</div>`;$('videoGrid').appendChild(card);updateHandCard(id,remoteMeta[id].handRaised)}
+
+function openVideoFullscreen(el){
+  if(!el) return;
+  const target = el.tagName === 'VIDEO' ? el : (el.querySelector('video') || el);
+  if(document.fullscreenElement){
+    document.exitFullscreen?.().catch(()=>{});
+    return;
+  }
+  const req = target.requestFullscreen || target.webkitRequestFullscreen || target.msRequestFullscreen;
+  if(req){
+    try {
+      const result = req.call(target);
+      if(result && result.catch) result.catch(()=>forceVideoFullscreen(target));
+      return;
+    } catch(e) {}
+  }
+  forceVideoFullscreen(target);
+}
+function forceVideoFullscreen(el){
+  el.classList.toggle('double-click-fullscreen');
+}
+function attachVideoDoubleClick(el){
+  if(!el || el.dataset.dblFsAttached) return;
+  el.dataset.dblFsAttached='1';
+  el.addEventListener('dblclick', function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    openVideoFullscreen(el);
+  }, {capture:true});
+}
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement){
+    document.querySelectorAll('.double-click-fullscreen').forEach(x=>x.classList.remove('double-click-fullscreen'));
+  }
+});
+
+function addLocalVideo(){const box=document.createElement('div');box.className='video-card local';box.id='localCard';box.innerHTML=`<video id="localVideo" autoplay muted playsinline></video><div class="name-tag">${esc(userName)} <b>YOU</b></div><div class="hand-badge hidden">🙋 Hand Raised</div>`;$('videoGrid').appendChild(box);if(localStream)$('localVideo').srcObject=localStream;attachVideoDoubleClick($('localVideo'));attachVideoDoubleClick(box);updateMediaButtons();updateHandCard(socket.id, handRaised)}
+function addRemoteVideo(id,name,r='student'){remoteMeta[id]={name,role:r,handRaised:participantState.get(id)?.handRaised||false};let card=document.getElementById('v-'+id);if(card)return;card=document.createElement('div');card.className='video-card';card.id='v-'+id;card.innerHTML=`<video id="video-${id}" autoplay playsinline></video><div class="name-tag">${esc(name)} ${r==='teacher'?'<b>TEACHER</b>':''}</div><div class="hand-badge hidden">🙋 Hand Raised</div>`;$('videoGrid').appendChild(card);attachVideoDoubleClick($('video-'+id));attachVideoDoubleClick(card);updateHandCard(id,remoteMeta[id].handRaised)}
 function removeVideo(id){document.getElementById('v-'+id)?.remove();delete remoteMeta[id];if(peers[id]){peers[id].close();delete peers[id]}}
 function makePeer(id,initiator){const pc=new RTCPeerConnection(rtc);if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));pc.onicecandidate=e=>{if(e.candidate)socket.emit('ice-candidate',{target:id,candidate:e.candidate})};pc.ontrack=e=>{addRemoteVideo(id,remoteMeta[id]?.name||'Participant',remoteMeta[id]?.role);$('video-'+id).srcObject=e.streams[0]};pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState)) removeVideo(id)};peers[id]=pc;if(initiator){pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>socket.emit('offer',{target:id,offer:pc.localDescription}))}return pc}
 socket.on('class-state',async s=>{className=s.className;$('classTitle').textContent=className;participantState=new Map((s.participants||[]).map(p=>[p.socketId,p]));s.existingUsers.forEach(u=>{remoteMeta[u.socketId]={name:u.userName,role:u.role,handRaised:participantState.get(u.socketId)?.handRaised||false};makePeer(u.socketId,true);addRemoteVideo(u.socketId,u.userName,u.role)});updateParticipants(s.participants)});
