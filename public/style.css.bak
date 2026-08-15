@@ -2,23 +2,3 @@
 @media(max-width:760px){.hero-card,.setup-card,.waiting-card{padding:28px 20px}.hero-card h1{font-size:38px}.mode-grid{grid-template-columns:1fr}.topbar{height:auto;min-height:58px;padding:10px 12px}.top-actions span:not(.live-pill){display:none}.video-grid{padding:10px;grid-template-columns:1fr;grid-auto-rows:230px}.controls{height:76px;gap:4px;padding:5px;overflow-x:auto;justify-content:flex-start}.control{min-width:62px;height:58px}.side-panel{position:absolute;right:0;top:58px;bottom:76px;width:min(92vw,340px);z-index:20}.class-code{font-size:34px;letter-spacing:6px}}
 
 .double-click-fullscreen{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;background:#000!important;object-fit:contain!important;margin:0!important;border-radius:0!important;}
-
-.schedule-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:2px 0 14px}
-.mode-toggle{height:44px;border-radius:12px;background:#ffffff0a;color:#aab5c7;border:1px solid #ffffff15;font-weight:800;font-size:12px}
-.mode-toggle.active{background:#0ea5e922;border-color:#38bdf877;color:#67e8f9}
-.schedule-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
-.schedule-fields label{font-size:11px;color:#93a4ba;font-weight:700}
-.schedule-fields input,.schedule-fields select{width:100%;height:45px;margin:6px 0 0;border-radius:11px;border:1px solid #ffffff18;background:#0003;color:#fff;padding:0 10px;outline:none}
-.schedule-list{margin-top:18px;display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto}
-.schedule-list:empty{display:none}
-.schedule-heading{display:flex;justify-content:space-between;align-items:center;color:#b9c6d8;margin-top:20px;font-size:13px}
-.schedule-heading button{background:#ffffff0a;color:#67e8f9;border:1px solid #ffffff12;border-radius:8px;padding:6px 9px;font-size:11px}
-.schedule-item{padding:12px;border:1px solid #ffffff12;background:#ffffff08;border-radius:13px;text-align:left}
-.schedule-item .schedule-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
-.schedule-item b{font-size:13px;color:#fff}
-.schedule-item small{display:block;color:#8fa0b6;margin-top:4px;line-height:1.5}
-.schedule-item .schedule-id{color:#67e8f9;font-weight:900;letter-spacing:2px}
-.schedule-item button{margin-top:8px;height:34px;padding:0 12px;border-radius:9px;background:#2563eb;color:#fff;font-size:11px;font-weight:800}
-.schedule-item button.disabled{background:#263143;color:#77869a;cursor:not-allowed}
-.scheduled-info{margin:12px 0 4px;padding:11px;border-radius:12px;background:#ffffff08;border:1px solid #ffffff12;color:#aebbd0;font-size:12px;line-height:1.5}
-@media(max-width:600px){.schedule-fields{grid-template-columns:1fr}.schedule-mode{grid-template-columns:1fr}.hero-card,.setup-card,.waiting-card{padding:28px 20px}.class-code{font-size:34px}}

@@ -14,7 +14,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = new Map();
-const schedules = new Map();
 
 function roomInfo(roomId) {
   const room = rooms.get(roomId);
@@ -25,64 +24,11 @@ function roomInfo(roomId) {
     teacherName: room.teacherName,
     participants: [...room.participants.values()].map(p => ({
       socketId: p.socketId, userName: p.userName, role: p.role, joinedAt: p.joinedAt, handRaised: !!p.handRaised, speakingAllowed: !!p.speakingAllowed, mutedByTeacher: !!p.mutedByTeacher
-    })),
-    scheduled: room.scheduled || null
+    }))
   };
 }
 
 io.on('connection', socket => {
-  socket.on('schedule-class', ({ className, teacherName, startAt, duration }) => {
-    className = String(className || 'Live Class').trim().slice(0, 80);
-    teacherName = String(teacherName || 'Teacher').trim().slice(0, 40);
-    startAt = Number(startAt);
-    duration = Math.max(15, Math.min(240, Number(duration) || 60));
-    if (!Number.isFinite(startAt) || startAt <= Date.now()) {
-      return socket.emit('join-error', 'Schedule time must be in the future.');
-    }
-    let roomId;
-    do { roomId = Math.floor(100000 + Math.random() * 900000).toString(); } while (rooms.has(roomId) || schedules.has(roomId));
-    const schedule = {
-      roomId, className, teacherName, startAt, duration,
-      active: false, status: 'scheduled', createdAt: Date.now()
-    };
-    schedules.set(roomId, schedule);
-    rooms.set(roomId, {
-      className, teacherId: null, teacherName,
-      participants: new Map(), active: false, scheduled: schedule
-    });
-    socket.emit('schedule-created', { schedule });
-  });
-
-  socket.on('start-scheduled-class', ({ roomId, teacherName }) => {
-    roomId = String(roomId || '').trim();
-    const room = rooms.get(roomId);
-    if (!room || !room.scheduled) return socket.emit('join-error', 'Scheduled class not found.');
-    if (room.teacherName.toLowerCase() !== String(teacherName || '').trim().toLowerCase()) {
-      return socket.emit('join-error', 'Only the scheduled teacher can start this class.');
-    }
-    const schedule = room.scheduled;
-    if (Date.now() < schedule.startAt) return socket.emit('join-error', `Class starts at ${new Date(schedule.startAt).toLocaleString()}.`);
-    room.active = true;
-    schedule.active = true;
-    schedule.status = 'live';
-    room.teacherId = socket.id;
-    socket.userName = room.teacherName;
-    socket.role = 'teacher';
-    socket.roomId = roomId;
-    socket.join(roomId);
-    room.participants.set(socket.id, { socketId: socket.id, userName: room.teacherName, role: 'teacher', joinedAt: Date.now(), handRaised: false, speakingAllowed: true, mutedByTeacher: false });
-    socket.emit('scheduled-started', { roomId, className: room.className, schedule });
-    io.to(roomId).emit('participants', roomInfo(roomId).participants);
-    setTimeout(() => {
-      const r = rooms.get(roomId);
-      if (r && r.active && r.scheduled && r.scheduled.status === 'live') {
-        io.to(roomId).emit('class-ended');
-        schedules.get(roomId).status = 'ended';
-        rooms.delete(roomId);
-      }
-    }, schedule.duration * 60000);
-  });
-
   socket.on('create-class', ({ className, teacherName }) => {
     className = String(className || 'Live Class').trim().slice(0, 80);
     teacherName = String(teacherName || 'Teacher').trim().slice(0, 40);
@@ -92,9 +38,7 @@ io.on('connection', socket => {
       className,
       teacherId: socket.id,
       teacherName,
-      participants: new Map(),
-      active: true,
-      scheduled: null
+      participants: new Map()
     });
     socket.emit('class-created', { roomId, className });
   });
@@ -105,7 +49,6 @@ io.on('connection', socket => {
     role = role === 'teacher' ? 'teacher' : 'student';
     const room = rooms.get(roomId);
     if (!room || !userName) return socket.emit('join-error', 'Class not found or name is missing.');
-    if (room.scheduled && !room.active) return socket.emit('join-error', 'This class has not started yet. Please join at the scheduled time.');
     if (role === 'teacher' && room.teacherId !== socket.id) return socket.emit('join-error', 'Only the class teacher can use teacher mode.');
 
     socket.join(roomId);
@@ -204,19 +147,6 @@ function removeUser(socket) {
   }
   socket.roomId = null;
 }
-
-app.get('/api/schedules', (req, res) => {
-  const now = Date.now();
-  for (const [id, s] of schedules) {
-    if (s.status !== 'ended' && now > s.startAt + s.duration * 60000 && !s.active) {
-      s.status = 'ended';
-    }
-  }
-  res.json([...schedules.values()].filter(s => s.status !== 'ended').map(s => ({
-    roomId: s.roomId, className: s.className, teacherName: s.teacherName,
-    startAt: s.startAt, duration: s.duration, active: !!s.active, status: s.status
-  })));
-});
 
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'Live Class' }));
 

@@ -39,43 +39,23 @@
   <div class="setup-card">
     <button class="back" id="backBtn">← Back</button>
     <div id="teacherSetup">
-      <div class="setup-icon">👨‍🏫</div><h2>Teacher Class</h2><p>Start a class now or schedule it for a future date and time.</p>
+      <div class="setup-icon">👨‍🏫</div><h2>Start a Live Class</h2><p>Create a class and share the Class ID with students.</p>
       <input id="teacherName" placeholder="Teacher name" autocomplete="off">
       <input id="className" placeholder="Class name e.g. Spoken English" autocomplete="off">
-      <div class="schedule-mode">
-        <button type="button" class="mode-toggle active" id="nowModeBtn">▶ Start Now</button>
-        <button type="button" class="mode-toggle" id="scheduleModeBtn">📅 Schedule Class</button>
-      </div>
-      <div id="scheduleFields" class="schedule-fields hidden">
-        <label>Class date<input id="scheduleDate" type="date"></label>
-        <label>Start time<input id="scheduleTime" type="time"></label>
-        <label>Duration
-          <select id="scheduleDuration">
-            <option value="30">30 minutes</option>
-            <option value="45">45 minutes</option>
-            <option value="60" selected>1 hour</option>
-            <option value="90">1.5 hours</option>
-            <option value="120">2 hours</option>
-          </select>
-        </label>
-      </div>
       <button class="primary" id="createBtn">Create Class</button>
-      <div id="teacherSchedules" class="schedule-list"></div>
     </div>
     <div id="studentSetup" class="hidden">
       <div class="setup-icon">👨‍🎓</div><h2>Join Live Class</h2><p>Enter the Class ID shared by your teacher.</p>
       <input id="studentName" placeholder="Student name" autocomplete="off">
       <input id="joinRoomId" placeholder="6-digit Class ID" inputmode="numeric" autocomplete="off">
       <button class="primary" id="joinBtn">Join Class</button>
-      <div class="schedule-heading"><b>📅 Upcoming Classes</b><button type="button" id="refreshSchedules">Refresh</button></div>
-      <div id="studentSchedules" class="schedule-list"></div>
     </div>
     <p id="setupError" class="error"></p>
   </div>
 </section>
 
 <section id="waiting" class="waiting hidden">
-  <div class="waiting-card"><div class="logo small">🎓</div><h2 id="waitingTitle">Class created</h2><p id="waitingDescription">Share this Class ID with your students:</p><div class="class-code" id="createdRoom">------</div><div id="scheduledInfo" class="scheduled-info hidden"></div><button class="primary" id="startClassBtn">Enter Class</button><button class="secondary" id="copyCreatedBtn">📋 Copy Class ID</button><button class="secondary" id="backToSetupBtn">← Back</button></div>
+  <div class="waiting-card"><div class="logo small">🎓</div><h2 id="waitingTitle">Class created</h2><p>Share this Class ID with your students:</p><div class="class-code" id="createdRoom">------</div><button class="primary" id="startClassBtn">Enter Class</button><button class="secondary" id="copyCreatedBtn">📋 Copy Class ID</button></div>
 </section>
 
 <section id="classScreen" class="class-screen hidden">

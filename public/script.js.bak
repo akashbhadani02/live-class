@@ -1,6 +1,6 @@
 const socket = io();
 const $ = id => document.getElementById(id);
-let mode = '', role = '', roomId = '', userName = '', className = '', scheduledClass = null, scheduleMode = false;
+let mode = '', role = '', roomId = '', userName = '', className = '';
 let localStream = null, screenStream = null, sharing = false, micOn = false, cameraOn = false, handRaised = false, speakingAllowed = false, mutedByTeacher = false;
 const peers = {}, remoteMeta = {};
 let participantState = new Map();
@@ -9,107 +9,13 @@ const rtc = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun
 function show(el){el.classList.remove('hidden')} function hide(el){el.classList.add('hidden')}
 function toast(msg){$('toast').textContent=msg;show($('toast'));setTimeout(()=>hide($('toast')),2500)}
 function resetSetup(){hide($('landing'));show($('setup')); hide($('teacherSetup')); hide($('studentSetup')); $('setupError').textContent='';}
-$('teacherMode').onclick=()=>{mode='teacher';resetSetup();show($('teacherSetup'));loadTeacherSchedules();$('teacherName').focus()};
-$('studentMode').onclick=()=>{mode='student';resetSetup();show($('studentSetup'));loadStudentSchedules();$('studentName').focus()};
+$('teacherMode').onclick=()=>{mode='teacher';resetSetup();show($('teacherSetup'));$('teacherName').focus()};
+$('studentMode').onclick=()=>{mode='student';resetSetup();show($('studentSetup'));$('studentName').focus()};
 $('backBtn').onclick=()=>{hide($('setup'));show($('landing'))};
-
-$('nowModeBtn').onclick=()=>setScheduleMode(false);
-$('scheduleModeBtn').onclick=()=>setScheduleMode(true);
-function setScheduleMode(v){
-  scheduleMode=v;
-  $('nowModeBtn').classList.toggle('active',!v);
-  $('scheduleModeBtn').classList.toggle('active',v);
-  $('scheduleFields').classList.toggle('hidden',!v);
-  $('createBtn').textContent=v?'📅 Schedule Class':'▶ Create Class';
-  if(v){
-    const d=new Date(); d.setMinutes(d.getMinutes()+5);
-    $('scheduleDate').value=d.toISOString().slice(0,10);
-    $('scheduleTime').value=d.toTimeString().slice(0,5);
-  }
-}
-
-$('createBtn').onclick=async()=>{
-  const n=$('teacherName').value.trim(), c=$('className').value.trim();
-  if(!n||!c)return $('setupError').textContent='Enter teacher name and class name.';
-  role='teacher';userName=n;className=c;
-  if(scheduleMode){
-    const date=$('scheduleDate').value, time=$('scheduleTime').value, duration=Number($('scheduleDuration').value);
-    if(!date||!time)return $('setupError').textContent='Select class date and start time.';
-    const startAt=new Date(`${date}T${time}`).getTime();
-    if(!Number.isFinite(startAt)||startAt<=Date.now())return $('setupError').textContent='Schedule time must be in the future.';
-    socket.emit('schedule-class',{teacherName:n,className:c,startAt,duration});
-  }else{
-    socket.emit('create-class',{teacherName:n,className:c});
-  }
-};
-
-$('joinBtn').onclick=async()=>{
-  const n=$('studentName').value.trim(), r=$('joinRoomId').value.trim();
-  if(!n||!r)return $('setupError').textContent='Enter your name and Class ID.';
-  role='student';userName=n;roomId=r;scheduledClass=null;await joinClass()
-};
-
-socket.on('class-created', async d=>{
-  roomId=d.roomId;className=d.className;scheduledClass=d.scheduled||null;
-  hide($('setup'));show($('waiting'));$('createdRoom').textContent=roomId;
-  $('waitingTitle').textContent=scheduledClass?`${className} scheduled`:`${className} created`;
-  $('waitingDescription').textContent=scheduledClass?'Share the Class ID. Start the class at the scheduled time.':'Share this Class ID with your students.';
-  $('scheduledInfo').classList.toggle('hidden',!scheduledClass);
-  if(scheduledClass){
-    $('scheduledInfo').innerHTML=`📅 <b>${formatDateTime(scheduledClass.startAt)}</b><br>⏱ Duration: ${scheduledClass.duration} minutes`;
-    $('startClassBtn').textContent='▶ Start Scheduled Class';
-  }else $('startClassBtn').textContent='Enter Class';
-});
-socket.on('scheduled-started', d=>{
-  roomId=d.roomId; className=d.className; role='teacher'; scheduledClass=d.schedule;
-  joinClass();
-});
-socket.on('schedule-created', d=>{
-  scheduledClass=d.schedule; roomId=d.schedule.roomId; className=d.schedule.className;
-  hide($('setup'));show($('waiting'));$('createdRoom').textContent=roomId;
-  $('waitingTitle').textContent=`${className} scheduled`;
-  $('waitingDescription').textContent='Share the Class ID with your students. Start the class when the scheduled time arrives.';
-  $('scheduledInfo').classList.remove('hidden');
-  $('scheduledInfo').innerHTML=`📅 <b>${formatDateTime(d.schedule.startAt)}</b><br>⏱ Duration: ${d.schedule.duration} minutes`;
-  $('startClassBtn').textContent='▶ Start Scheduled Class';
-  toast('Class scheduled successfully');
-  loadTeacherSchedules();
-});
-$('copyCreatedBtn').onclick=()=>copy(roomId);
-$('startClassBtn').onclick=()=>{
-  if(scheduledClass){
-    if(Date.now()<scheduledClass.startAt){toast(`Class starts at ${formatDateTime(scheduledClass.startAt)}`);return;}
-    socket.emit('start-scheduled-class',{roomId,teacherName:userName});
-  }else joinClass();
-};
-$('backToSetupBtn').onclick=()=>{hide($('waiting'));show($('setup'));show($('teacherSetup'));loadTeacherSchedules()};
-$('refreshSchedules').onclick=loadStudentSchedules;
-
-function formatDateTime(ts){return new Date(ts).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}
-async function getSchedules(){
-  try{const r=await fetch('/api/schedules');return await r.json()}catch(e){return []}
-}
-async function loadStudentSchedules(){
-  const list=$('studentSchedules'); if(!list)return;
-  const data=await getSchedules();
-  const upcoming=data.filter(x=>x.status!=='ended').sort((a,b)=>a.startAt-b.startAt);
-  list.innerHTML=upcoming.length?upcoming.map(x=>{
-    const ready=Date.now()>=x.startAt && x.active;
-    const starts=Date.now()>=x.startAt?'Started':'Starts '+formatDateTime(x.startAt);
-    return `<div class="schedule-item"><div class="schedule-top"><b>${esc(x.className)}</b><span class="schedule-id">${x.roomId}</span></div><small>👨‍🏫 ${esc(x.teacherName)}<br>📅 ${starts} · ⏱ ${x.duration} min</small><button class="${ready?'':'disabled'}" ${ready?'onclick="joinScheduled(\''+x.roomId+'\')"':'disabled'}>${ready?'Join Class':'Not Started'}</button></div>`;
-  }).join(''):'<div class="schedule-item"><small>No upcoming scheduled classes.</small></div>';
-}
-window.joinScheduled=id=>{const n=$('studentName').value.trim();if(!n){$('setupError').textContent='Enter your student name first.';$('studentName').focus();return;}role='student';userName=n;roomId=id;joinClass()};
-async function loadTeacherSchedules(){
-  const list=$('teacherSchedules'); if(!list)return;
-  const teacher=$('teacherName').value.trim();
-  if(!teacher){list.innerHTML='';return}
-  const data=await getSchedules();
-  const mine=data.filter(x=>x.teacherName.toLowerCase()===teacher.toLowerCase()&&x.status!=='ended').sort((a,b)=>a.startAt-b.startAt);
-  list.innerHTML=mine.length?'<div class="schedule-heading"><b>📅 Your Scheduled Classes</b></div>'+mine.map(x=>`<div class="schedule-item"><div class="schedule-top"><b>${esc(x.className)}</b><span class="schedule-id">${x.roomId}</span></div><small>📅 ${formatDateTime(x.startAt)} · ⏱ ${x.duration} min<br>Status: ${x.active?'Ready / Live':'Scheduled'}</small></div>`).join(''):'';
-}
-$('teacherName').addEventListener('blur',()=>{if(mode==='teacher')loadTeacherSchedules()});
-
+$('createBtn').onclick=async()=>{const n=$('teacherName').value.trim(), c=$('className').value.trim(); if(!n||!c)return $('setupError').textContent='Enter teacher name and class name.'; role='teacher';userName=n;className=c; socket.emit('create-class',{teacherName:n,className:c});};
+$('joinBtn').onclick=async()=>{const n=$('studentName').value.trim(), r=$('joinRoomId').value.trim();if(!n||!r)return $('setupError').textContent='Enter your name and Class ID.';role='student';userName=n;roomId=r;await joinClass()};
+socket.on('class-created', async d=>{roomId=d.roomId;className=d.className;hide($('setup'));show($('waiting'));$('createdRoom').textContent=roomId;$('waitingTitle').textContent=`${className} created`;});
+$('copyCreatedBtn').onclick=()=>copy(roomId); $('startClassBtn').onclick=()=>joinClass();
 async function joinClass(){
   hide($('landing'));hide($('setup'));hide($('waiting'));show($('classScreen'));
   $('currentRoom').textContent=roomId;$('classTitle').textContent=className||'Live Class';
